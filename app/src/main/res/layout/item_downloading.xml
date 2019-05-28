@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"
+              android:orientation="vertical"
+              android:padding="@dimen/dp_10"
+              android:id="@+id/ll_downloading_container"
+              android:layout_width="match_parent"
+              android:layout_height="wrap_content">
+
+    <android.support.v7.widget.AppCompatTextView
+            android:textColor="@android:color/black"
+            android:textSize="@dimen/sp_16"
+            tools:text="@string/app_name"
+            android:id="@+id/tv_name"
+            android:layout_width="match_parent"
+            android:singleLine="true"
+            android:layout_height="wrap_content"/>
+
+
+    <ProgressBar
+            android:id="@+id/pb_downloading_bar"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:max="100"
+            tools:progress="0"
+            android:progressDrawable="@drawable/shape_downloading_progress"
+    />
+
+    <LinearLayout
+            android:layout_marginTop="@dimen/dp_10"
+            android:weightSum="2"
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+        <android.support.v7.widget.AppCompatTextView
+                android:id="@+id/tv_downloading_status"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                tools:text="下载中"
+                android:layout_height="wrap_content"/>
+
+        <android.support.v7.widget.AppCompatTextView
+                android:id="@+id/tv_downloading_speed"
+                android:layout_width="0dp"
+                android:gravity="end"
+                android:layout_weight="1"
+                tools:text="2M/S"
+                android:layout_height="wrap_content"/>
+
+    </LinearLayout>
+
+</LinearLayout>

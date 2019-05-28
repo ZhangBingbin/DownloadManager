@@ -5,23 +5,45 @@
         android:layout_width="match_parent"
         android:orientation="vertical"
         android:gravity="center"
-        android:padding="15dp"
         android:layout_height="match_parent"
         tools:context=".MainActivity">
 
-    <android.support.v7.widget.AppCompatEditText
-            android:id="@+id/ed_input_url"
-            android:singleLine="true"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
 
-    <android.support.v7.widget.AppCompatButton
-            android:layout_marginTop="40dp"
-            android:text="开始下载"
-            android:id="@+id/btn_start_download"
-            android:background="@color/colorPrimary"
-            android:textColor="@android:color/white"
+    <android.support.v4.view.ViewPager
+            android:id="@+id/index_pager"
+            android:layout_weight="1"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
+            android:layout_height="0dp"/>
+
+
+    <RadioGroup
+            android:id="@+id/rg_index"
+            android:weightSum="2"
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="50dp">
+
+        <RadioButton
+                android:textColor="@drawable/selector_index_bottom"
+                android:gravity="center"
+                android:button="@null"
+                android:text="添加任务"
+                android:layout_weight="1"
+                android:id="@+id/rd_add"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"/>
+
+
+        <RadioButton
+                android:textColor="@drawable/selector_index_bottom"
+                android:gravity="center"
+                android:button="@null"
+                android:text="已下载"
+                android:layout_weight="1"
+                android:id="@+id/rd_downloaded"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"/>
+
+    </RadioGroup>
 
 </LinearLayout>
