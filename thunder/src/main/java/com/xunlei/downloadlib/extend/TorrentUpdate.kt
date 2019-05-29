@@ -1,6 +1,5 @@
 package com.xunlei.downloadlib.extend
 
-import com.blankj.utilcode.util.LogUtils
 import com.blankj.utilcode.util.NetworkUtils
 import com.xunlei.downloadlib.XLTaskHelper
 import com.xunlei.downloadlib.database.DownloadDaoManager
@@ -8,7 +7,6 @@ import com.xunlei.downloadlib.extend.utils.DownUtil
 import com.xunlei.downloadlib.extend.utils.FileTools
 import com.xunlei.downloadlib.status.DownloadStatus
 import com.xunlei.downloadlib.util.DownloadUtil
-import org.greenrobot.eventbus.EventBus
 
 /**
  * ================================================
@@ -58,7 +56,7 @@ class TorrentUpdate {
                         val taskInfo = XLTaskHelper.instance().getTaskInfo(task.taskId.toLong())
                         task.status = taskInfo.mTaskStatus
                         task.currentSize = taskInfo.mDownloadSize
-                        task.taskId=taskInfo.mTaskId.toInt()
+                        task.taskId = taskInfo.mTaskId.toInt()
                         task.totalSize = taskInfo.mFileSize
                         task.speed = FileTools.convertFileSize(taskInfo.mDownloadSpeed)
                         if (taskInfo.mFileSize != 0L) {
@@ -71,7 +69,7 @@ class TorrentUpdate {
                             DownloadDaoManager.INSTANCE.updateTask(task)
                         }
                     } else {
-                        if (wait<0&&task.status==DownloadStatus.WAIT.value){
+                        if (wait < 0 && task.status == DownloadStatus.WAIT.value) {
                             DownloadUtil.INSTANCE.startTorrent(task)
                         }
                     }

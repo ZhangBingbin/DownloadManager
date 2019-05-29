@@ -38,7 +38,7 @@ class DownloadInfo : LitePalSupport(), Serializable {
     //下载速度
     var speed: String = "0KB"
     //视频类型
-    var videoType:String?=""
+    var videoType:String=""
     //m3u8加密key url
     var keyUrl: String? = ""
     //视频时长

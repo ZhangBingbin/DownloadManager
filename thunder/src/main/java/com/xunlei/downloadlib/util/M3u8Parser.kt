@@ -42,7 +42,6 @@ object M3u8Parser {
                         } else {
                             downloadInfo.keyUrl = basePath + keyUrl
                         }
-                        LogUtils.eTag("ZBB", "加密Key=${downloadInfo.keyUrl}")
                     } else if (!line.startsWith("#EXT")) {
                         //ts
                         val tsLine = if (line.startsWith("http")) {
@@ -51,7 +50,6 @@ object M3u8Parser {
                             basePath + line
                         }
                         downloadInfo.tsList.add(tsLine)
-                        LogUtils.eTag("ZBB", "ts=$tsLine")
                     } else {
                         //其他
                     }

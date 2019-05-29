@@ -1,12 +1,11 @@
 package com.xunlei.downloadmanager
 
-import android.support.v7.widget.AppCompatTextView
-import android.widget.ProgressBar
 import com.chad.library.adapter.base.BaseQuickAdapter
 import com.chad.library.adapter.base.BaseViewHolder
 import com.xunlei.downloadlib.bean.DownloadInfo
-import com.xunlei.downloadlib.event.DownloadEvent
+import com.xunlei.downloadlib.extend.utils.FileTools
 import com.xunlei.downloadlib.status.DownloadStatus
+import com.xunlei.downloadlib.status.VideoType
 
 /**
  * ================================================
@@ -45,49 +44,18 @@ class DownloadingAdapter : BaseQuickAdapter<DownloadInfo, BaseViewHolder>(R.layo
                 "等待下载"
             }
         }
-        helper.setText(R.id.tv_downloading_status, status)
-        helper.setText(R.id.tv_downloading_speed, item.speed)
-    }
 
-    fun updateItemData(downloadInfo: DownloadInfo) {
-        if (!data.isNullOrEmpty()) {
-            repeat(data.size) {
-                val info = data[it]
-                if (downloadInfo.fileName == info.fileName) {
-                    val view = getViewByPosition(it, R.id.ll_downloading_container)
-                    val downloadingPb = view?.findViewById<ProgressBar>(R.id.pb_downloading_bar)
-                    val tvStatus = view?.findViewById<AppCompatTextView>(R.id.tv_downloading_status)
-                    val tvSpeed = view?.findViewById<AppCompatTextView>(R.id.tv_downloading_speed)
-                    val status = when (downloadInfo.status) {
-                        DownloadStatus.WAIT.value -> {
-                            //开始下载
-                            "等待下载"
-                        }
-                        DownloadStatus.PAUSE.value -> {
-                            //暂停下载
-                            "已暂停"
-                        }
-                        DownloadStatus.DOWNLOADING.value -> {
-                            //正在下载
-                            "下载中"
-                        }
-                        DownloadStatus.ERROR.value -> {
-                            //下载错误
-                            "下载错误"
-                        }
-                        DownloadStatus.COMPLETE.value -> {
-                            //下载完成
-                            "下载完成"
-                        }
-                        else -> {
-                            "等待下载"
-                        }
-                    }
-                    downloadingPb?.progress = downloadInfo.progress
-                    tvStatus?.text = status
-                    tvSpeed?.text = downloadInfo.speed
-                }
+        val str = when (item.videoType) {
+            VideoType.TYPE_M3U8.value -> {
+                status + ":" + item.currentSize + "/" + item.totalSize
+            }
+            else -> {
+                status + ":" + FileTools.convertFileSize(item.currentSize) + "/" + FileTools.convertFileSize(
+                    item.totalSize
+                )
             }
         }
+        helper.setText(R.id.tv_downloading_status, str)
+        helper.setText(R.id.tv_downloading_speed, item.speed)
     }
 }

@@ -10,6 +10,5 @@ package com.xunlei.downloadlib.status
  */
 enum class VideoType(val value:String) {
     TYPE_M3U8("m3u8"),
-    TYPE_MP4("mp4"),
-    TYPE_OTHER("torrent")
+    TYPE_OTHER("other")
 }

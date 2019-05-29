@@ -1,6 +1,5 @@
 package com.xunlei.downloadlib.util
 
-import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Intent
 import android.os.Environment
@@ -15,12 +14,10 @@ import com.xunlei.downloadlib.bean.TsDownloadInfo
 import com.xunlei.downloadlib.database.DownloadDaoManager
 import com.xunlei.downloadlib.extend.service.DownService
 import com.xunlei.downloadlib.extend.utils.FileTools
-import com.xunlei.downloadlib.listener.BaseObserveListener
 import com.xunlei.downloadlib.listener.OkHttp3Connection
 import com.xunlei.downloadlib.status.DownloadStatus
 import com.xunlei.downloadlib.status.VideoType
 import io.reactivex.Observable
-import io.reactivex.ObservableOnSubscribe
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.schedulers.Schedulers
 import org.litepal.LitePal
@@ -33,7 +30,7 @@ import java.util.concurrent.atomic.AtomicLong
  * ================================================
  * 框架要求框架中的每个 {@link } 都需要实现此类,以满足规范
  *
- * @function 作用
+ * @function 作用  下载核心管理类
  * Created by Joe_ZBB on 2019-05-27 10:56
  * ================================================
  */
@@ -48,202 +45,82 @@ class DownloadUtil {
     }
 
     /**
-     * 开始下载
+     * 用来储存m3u8下载的监听事件(处理多任务的暂停)
+     */
+    private var mDownloadContextMap = mutableMapOf<String, FileDownloadListener>()
+
+    /**
+     * 开始下载（分为m3u8，和其他文件类型下载(mp4,ftp,torrent等等)）
+     * url：下载地址
+     * callBack：任务的状态
+     * continueDownload:是否继续下载或重新下载
+     * name:文件名称
+     * fastDownload:是否高速下载
      */
     fun startDownload(
         url: String,
+        callBack: (msg: Int) -> Unit,
+        continueDownload: Boolean = false,
         name: String? = "",
-        size: Long? = 1L,
         fastDownload: Boolean? = false
     ) {
-        val downloadInfo = DownloadInfo()
-        downloadInfo.downloadUrl = url
-        downloadInfo.fastDownload = fastDownload ?: false
-        downloadInfo.size = size ?: 1L
-        downloadInfo.status = DownloadStatus.WAIT.value
-        when {
-            url.contains(".m3u8") -> {
-                Observable.create<DownloadInfo> {
-                    it.onNext(M3u8Parser.parserM3u8(downloadInfo))
-                    it.onComplete()
+        val tasks = DownloadDaoManager.INSTANCE.findExitTaskUrl(url)
+        if (!tasks.isNullOrEmpty() && !continueDownload) {
+            //任务存在
+            val task = tasks[0]
+            when (task.status) {
+                DownloadStatus.COMPLETE.value -> {
+                    //已完成
+                    callBack(DownloadStatus.COMPLETE.value)
                 }
-                    .subscribeOn(Schedulers.io())
-                    .observeOn(AndroidSchedulers.mainThread())
-                    .subscribe {
-                        it.videoType = VideoType.TYPE_M3U8.value
-                        val fileName = "${Util.getCurrentTime()}.m3u8"
-                        it.fileName = fileName
-                        if (!TextUtils.isEmpty(name)) {
-                            it.videoName = "$name.m3u8"
-                        } else {
-                            it.videoName = fileName
-                        }
-                        it.savePath = getDownloadPath() + fileName
-                        it.save()
-                        startM3u8(it)
-                    }
+                else -> {
+                    //正在下载列表中的数据
+                    callBack(DownloadStatus.DOWNLOADING.value)
+                }
             }
-            url.contains(".mp4") -> {
-                downloadInfo.videoType = VideoType.TYPE_MP4.value
-                val fileName = "${Util.getCurrentTime()}.mp4"
-                downloadInfo.fileName = fileName
-                if (!TextUtils.isEmpty(name)) {
-                    downloadInfo.videoName = "$name.mp4"
-                } else {
-                    downloadInfo.videoName = fileName
-                }
-                downloadInfo.savePath = getDownloadPath() + fileName
-                downloadInfo.save()
-                startMp4(downloadInfo)
-            }
-            else -> {
-                val extensionName = "." + FileUtils.getFileExtension(url)
-                val fileName = Util.getCurrentTime() + extensionName
-                downloadInfo.fileName = fileName
-                if (!TextUtils.isEmpty(name)) {
-                    downloadInfo.videoName = name + extensionName
-                } else {
-                    downloadInfo.videoName = fileName
-                }
-                downloadInfo.videoType = VideoType.TYPE_OTHER.value
-                downloadInfo.savePath = getDownloadPath() + fileName
-                startTorrent(downloadInfo)
-            }
-        }
-    }
-
-    /**
-     * mp4下载
-     */
-    private fun startMp4(downloadInfo: DownloadInfo) {
-        val taskId = FileDownloader.getImpl()
-            .create(downloadInfo.downloadUrl)
-            .addHeader("User-Agent", Constants.ANDROID_USER_AGENT)
-            .setPath(downloadInfo.savePath)
-            .setListener(object : FileDownloadSampleListener() {
-                override fun pending(task: BaseDownloadTask?, soFarBytes: Int, totalBytes: Int) {
-                    super.pending(task, soFarBytes, totalBytes)
-                    //准备中
-                    sendMp4DownloadState(
-                        downloadInfo,
-                        DownloadStatus.WAIT.value,
-                        soFarBytes,
-                        totalBytes,
-                        task?.speed
-                    )
-                }
-
-                override fun started(task: BaseDownloadTask?) {
-                    super.started(task)
-                    LogUtils.eTag("ZBB", "下载开始")
-                    //开始中
-                    sendMp4DownloadState(
-                        downloadInfo,
-                        DownloadStatus.WAIT.value,
-                        task?.smallFileSoFarBytes,
-                        task?.smallFileTotalBytes,
-                        task?.speed
-                    )
-                }
-
-                override fun error(task: BaseDownloadTask?, e: Throwable?) {
-                    super.error(task, e)
-                    //下载错误
-                    sendMp4DownloadState(
-                        downloadInfo,
-                        DownloadStatus.ERROR.value,
-                        task?.smallFileSoFarBytes,
-                        task?.smallFileTotalBytes,
-                        task?.speed
-                    )
-                }
-
-                override fun connected(
-                    task: BaseDownloadTask?,
-                    etag: String?,
-                    isContinue: Boolean,
-                    soFarBytes: Int,
-                    totalBytes: Int
-                ) {
-                    super.connected(task, etag, isContinue, soFarBytes, totalBytes)
-                    //已连接
-                    sendMp4DownloadState(
-                        downloadInfo,
-                        DownloadStatus.DOWNLOADING.value,
-                        soFarBytes,
-                        totalBytes,
-                        task?.speed
-                    )
-                }
-
-                override fun progress(task: BaseDownloadTask?, soFarBytes: Int, totalBytes: Int) {
-                    super.progress(task, soFarBytes, totalBytes)
-                    LogUtils.eTag("ZBB", "下载中=soFarBytes=$soFarBytes totalBytes=$totalBytes")
-                    //下载中
-                    sendMp4DownloadState(
-                        downloadInfo,
-                        DownloadStatus.DOWNLOADING.value,
-                        soFarBytes,
-                        totalBytes,
-                        task?.speed
-                    )
-                }
-
-                override fun paused(task: BaseDownloadTask?, soFarBytes: Int, totalBytes: Int) {
-                    super.paused(task, soFarBytes, totalBytes)
-                    //已暂停
-                    sendMp4DownloadState(
-                        downloadInfo,
-                        DownloadStatus.PAUSE.value,
-                        soFarBytes,
-                        totalBytes,
-                        task?.speed
-                    )
-                }
-
-                override fun completed(task: BaseDownloadTask?) {
-                    super.completed(task)
-                    LogUtils.eTag("ZBB", "下载成功")
-                    //下载完成
-                    sendMp4DownloadState(
-                        downloadInfo,
-                        DownloadStatus.COMPLETE.value,
-                        0,
-                        task?.smallFileTotalBytes,
-                        task?.speed
-                    )
-                }
-            })
-            .setForceReDownload(true)
-            .setAutoRetryTimes(2)
-            .setSyncCallback(true)
-            .setCallbackProgressTimes(1000)
-            .start()
-        downloadInfo.taskId = taskId
-        downloadInfo.save()
-    }
-
-    @SuppressLint("CheckResult")
-    private fun sendMp4DownloadState(
-        downloadInfo: DownloadInfo,
-        status: Int,
-        currentSize: Int?,
-        totalSize: Int?,
-        speed: Int? = 0
-    ) {
-
-        downloadInfo.currentSize = currentSize?.toLong() ?: 0L
-        downloadInfo.totalSize = totalSize?.toLong() ?: 1L
-        downloadInfo.speed = String.format("%sKB/S", speed)
-        downloadInfo.fastDownload = downloadInfo.fastDownload
-        downloadInfo.status = status
-        if (status == DownloadStatus.COMPLETE.value) {
-            //更新数据库
-            downloadInfo.status = DownloadStatus.COMPLETE.value
-            downloadInfo.totalSize = totalSize?.toLong() ?: 1L
-            DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
         } else {
+            //任务不存在(重新下载或继续下载)
+            val downloadInfo = DownloadInfo()
+            downloadInfo.downloadUrl = url
+            downloadInfo.fastDownload = fastDownload ?: false
+            downloadInfo.status = DownloadStatus.WAIT.value
             DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
+            when {
+                url.contains(".m3u8") -> {
+                    Observable.create<DownloadInfo> {
+                        it.onNext(M3u8Parser.parserM3u8(downloadInfo))
+                        it.onComplete()
+                    }
+                        .subscribeOn(Schedulers.io())
+                        .observeOn(AndroidSchedulers.mainThread())
+                        .subscribe {
+                            it.videoType = VideoType.TYPE_M3U8.value
+                            val fileName = "${Util.getCurrentTime()}.m3u8"
+                            it.fileName = fileName
+                            if (!TextUtils.isEmpty(name)) {
+                                it.videoName = "$name.m3u8"
+                            } else {
+                                it.videoName = fileName
+                            }
+                            it.savePath = getDownloadPath() + fileName
+                            DownloadDaoManager.INSTANCE.updateTask(it)
+                            startM3u8(it)
+                        }
+                }
+                else -> {
+                    val extensionName = "." + FileUtils.getFileExtension(url).substringBefore("?")
+                    val fileName = Util.getCurrentTime() + extensionName
+                    downloadInfo.fileName = fileName
+                    if (!TextUtils.isEmpty(name)) {
+                        downloadInfo.videoName = name + extensionName
+                    } else {
+                        downloadInfo.videoName = fileName
+                    }
+                    downloadInfo.videoType = VideoType.TYPE_OTHER.value
+                    downloadInfo.savePath = getDownloadPath() + fileName
+                    startTorrent(downloadInfo)
+                }
+            }
         }
     }
 
@@ -253,80 +130,54 @@ class DownloadUtil {
     private fun startM3u8(downloadInfo: DownloadInfo) {
         val downloadPath = getDownloadPath()
         val tsDownloadList = mutableListOf<TsDownloadInfo>()
-        Observable.create(ObservableOnSubscribe<Void> {
-            M3u8ParserUtil().parallelParserM3u8Content(downloadInfo)
-            it.onComplete()
-        })
-            .subscribeOn(Schedulers.io())
-            .unsubscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe(object : BaseObserveListener<Void>() {
-                override fun onComplete() {
-                    super.onComplete()
-                    if (!downloadInfo.tsList.isNullOrEmpty()) {
-                        val keyUrl = downloadInfo.keyUrl
-                        val m3u8Content = downloadInfo.m3u8Content
-                        val pathName = "$downloadPath/${downloadInfo.fileName.replace(".m3u8", "")}"
-                        if (!Util.isEmpty(keyUrl)) {
-                            val key = keyUrl!!.substringAfterLast("URI=\"").substringBefore("\"")
-                            downloadKey(key, pathName)
-                            m3u8Content?.replace(key, "${pathName}key.key")
-                        }
-                        val m3u8List = downloadInfo.tsList.toList()
-                        if (m3u8List.isNotEmpty()) {
-                            var num = 0
-                            for (line in m3u8List) {
-                                if (!TextUtils.isEmpty(line)) {
-                                    val tsDownloadInfo = TsDownloadInfo()
-                                    tsDownloadInfo.num = num
-                                    tsDownloadInfo.url = line
-                                    tsDownloadInfo.name = "$num.ts"
-                                    tsDownloadInfo.path = pathName + "/" + tsDownloadInfo.name
-                                    tsDownloadList.add(tsDownloadInfo)
-                                    ++num
-                                }
-                            }
-                            if (tsDownloadList.isNotEmpty()) {
-                                downloadTs(tsDownloadList, downloadInfo)
-                            } else {
-                                updateM3u8DownloadState(DownloadStatus.ERROR.value, downloadInfo)
-                            }
-                        } else {
-                            updateM3u8DownloadState(DownloadStatus.ERROR.value, downloadInfo)
-                        }
-                    } else {
-                        updateM3u8DownloadState(DownloadStatus.ERROR.value, downloadInfo)
+        if (!downloadInfo.tsList.isNullOrEmpty()) {
+            val keyUrl = downloadInfo.keyUrl
+            val m3u8Content = downloadInfo.m3u8Content
+            val pathName = "$downloadPath/${downloadInfo.fileName.replace(".m3u8", "")}"
+            if (!Util.isEmpty(keyUrl)) {
+                val key = keyUrl!!.substringAfterLast("URI=\"").substringBefore("\"")
+                downloadKey(key, pathName)
+                m3u8Content?.replace(key, "${pathName}key.key")
+            }
+            val m3u8List = downloadInfo.tsList.toList()
+            if (m3u8List.isNotEmpty()) {
+                var num = 0
+                for (line in m3u8List) {
+                    if (!TextUtils.isEmpty(line)) {
+                        val tsDownloadInfo = TsDownloadInfo()
+                        tsDownloadInfo.num = num
+                        tsDownloadInfo.url = line
+                        tsDownloadInfo.name = "$num.ts"
+                        tsDownloadInfo.path = pathName + "/" + tsDownloadInfo.name
+                        tsDownloadList.add(tsDownloadInfo)
+                        ++num
                     }
                 }
-            })
+                if (tsDownloadList.isNotEmpty()) {
+                    downloadTs(tsDownloadList, downloadInfo)
+                } else {
+                    updateM3u8DownloadState(DownloadStatus.ERROR.value, downloadInfo)
+                }
+            } else {
+                updateM3u8DownloadState(DownloadStatus.ERROR.value, downloadInfo)
+            }
+        } else {
+            updateM3u8DownloadState(DownloadStatus.ERROR.value, downloadInfo)
+        }
     }
 
     /**
-     * 种子下载
+     * 种子下载(ftp,torrent,mp4)
      */
     fun startTorrent(downloadInfo: DownloadInfo) {
-        val url = downloadInfo.downloadUrl
-        val tasks = DownloadDaoManager.INSTANCE.findTaskUrl(url)
-//        if (!tasks.isNullOrEmpty()) {
-//            //任务存在
-//            val task = tasks[0]
-//            when (task.status) {
-//                DownloadStatus.COMPLETE.value -> {
-//                    //已完成
-//                }
-//                else -> {
-//                    //下载中
-//                }
-//            }
-//        } else {
         //任务不存在
+        val url = downloadInfo.downloadUrl
         val path = getDownloadPath()
         val taskId = if (url.startsWith("magnet:?")) {
             XLTaskHelper.instance().addMagnetTask(url, path, null)
         } else {
             XLTaskHelper.instance().addThunderTask(url, path, null)
         }
-        LogUtils.eTag("ZBB", "得到的任务ID=$taskId")
         val taskInfo = XLTaskHelper.instance().getTaskInfo(taskId)
         downloadInfo.taskId = taskInfo.mTaskId.toInt()
         downloadInfo.currentSize = taskInfo.mDownloadSize
@@ -335,14 +186,25 @@ class DownloadUtil {
         downloadInfo.status = taskInfo.mTaskStatus
         downloadInfo.speed = FileTools.convertFileSize(taskInfo.mDownloadSpeed)
         DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
-//        }
     }
 
     /**
-     * 暂停
+     * 暂停任务
      */
-    fun pause(taskId: Int) {
-        FileDownloader.getImpl().pause(taskId)
+    fun pause(downloadInfo: DownloadInfo) {
+        val taskId = downloadInfo.taskId
+        val videoType = downloadInfo.videoType
+        DownloadDaoManager.INSTANCE.pauseTask(taskId)
+        when (videoType) {
+            VideoType.TYPE_OTHER.value -> {
+                //暂停mp4,种子,ftp
+                XLTaskHelper.instance().removeTask(taskId.toLong())
+            }
+            else -> {
+                //暂停m3u8
+                FileDownloader.getImpl().pause(mDownloadContextMap[downloadInfo.fileName])
+            }
+        }
     }
 
     /**
@@ -350,6 +212,11 @@ class DownloadUtil {
      */
     fun pauseAll() {
         FileDownloader.getImpl().pauseAll()
+        for (downloadInfo in DownloadDaoManager.INSTANCE.loadTorrentDownloadingList()) {
+            if (downloadInfo.taskId != 0) {
+                XLTaskHelper.instance().stopTask(downloadInfo.taskId.toLong())
+            }
+        }
     }
 
     /**
@@ -369,8 +236,11 @@ class DownloadUtil {
     /**
      * 下载TS
      */
-    private fun downloadTs(tsDownloadList: List<TsDownloadInfo>, downloadInfo: DownloadInfo) {
-        downloadInfo.updateAll("fileName = ?", downloadInfo.fileName)
+    private fun downloadTs(
+        tsDownloadList: List<TsDownloadInfo>,
+        downloadInfo: DownloadInfo
+    ) {
+        DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
         val currentNum = AtomicLong(0)
         val downloadListener = createDownloadListener(downloadInfo, tsDownloadList, currentNum)
         val queueSet = FileDownloadQueueSet(downloadListener)
@@ -384,13 +254,20 @@ class DownloadUtil {
                     .setPath(tsDownloadInfo.path)
             )
         }
+        if (mDownloadContextMap.contains(downloadInfo.fileName)) {
+            mDownloadContextMap.remove(downloadInfo.fileName)
+        }
+        mDownloadContextMap[downloadInfo.fileName] = downloadListener
         queueSet.disableCallbackProgressTimes()
         queueSet.setForceReDownload(true)
-        queueSet.setAutoRetryTimes(3)
+        queueSet.setAutoRetryTimes(2)
         queueSet.downloadSequentially(tasks)
         queueSet.start()
     }
 
+    /**
+     * m3u8下载的监听事件
+     */
     private fun createDownloadListener(
         downloadInfo: DownloadInfo,
         tsDownloadList: List<TsDownloadInfo>,
@@ -407,7 +284,6 @@ class DownloadUtil {
                         )
                     currentNum.getAndIncrement()
                 }
-
                 downloadInfo.currentSize = currentNum.get()
                 downloadInfo.totalSize = tsDownloadList.size.toLong()
                 if (currentNum.get() == tsDownloadList.size.toLong()) {
@@ -418,12 +294,13 @@ class DownloadUtil {
                     bw.close()
                     //更新数据库
                     downloadInfo.status = DownloadStatus.COMPLETE.value
-                    downloadInfo.updateAll("fileName = ?", downloadInfo.fileName)
-                    downloadInfo.status = DownloadStatus.COMPLETE.value
                 } else {
                     //下载中
                     downloadInfo.status = DownloadStatus.DOWNLOADING.value
                     downloadInfo.speed = "${task?.speed}KB/S"
+                    if (downloadInfo.totalSize != 0L) {
+                        downloadInfo.progress = (downloadInfo.currentSize * 100 / downloadInfo.totalSize).toInt()
+                    }
                 }
                 DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
             }
@@ -432,14 +309,22 @@ class DownloadUtil {
                 downloadInfo.currentSize = task?.smallFileSoFarBytes?.toLong() ?: 0L
                 downloadInfo.totalSize = task?.smallFileTotalBytes?.toLong() ?: 1L
                 downloadInfo.status = DownloadStatus.ERROR.value
+                if (downloadInfo.totalSize != 0L) {
+                    downloadInfo.progress = (downloadInfo.currentSize * 100 / downloadInfo.totalSize).toInt()
+                }
                 DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
             }
 
             override fun paused(task: BaseDownloadTask?, soFarBytes: Int, totalBytes: Int) {
-                downloadInfo.currentSize = currentNum.get()
-                downloadInfo.totalSize = tsDownloadList.size.toLong()
-                downloadInfo.status = DownloadStatus.PAUSE.value
-                DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
+                if (downloadInfo.status != DownloadStatus.PAUSE.value) {
+                    downloadInfo.currentSize = currentNum.get()
+                    downloadInfo.totalSize = tsDownloadList.size.toLong()
+                    downloadInfo.status = DownloadStatus.PAUSE.value
+                    if (downloadInfo.totalSize != 0L) {
+                        downloadInfo.progress = (downloadInfo.currentSize * 100 / downloadInfo.totalSize).toInt()
+                    }
+                    DownloadDaoManager.INSTANCE.updateTask(downloadInfo)
+                }
             }
         }
     }
@@ -494,7 +379,7 @@ class DownloadUtil {
 
 
     /**
-     * 初始化数据库以及下载框架
+     * 初始化数据库以及下载框架（必须）
      */
     fun init(application: Application) {
         Utils.init(application)

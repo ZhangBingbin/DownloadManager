@@ -8,7 +8,6 @@ import android.support.v4.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import org.greenrobot.eventbus.EventBus
 
 /**
  * ================================================
@@ -18,7 +17,7 @@ import org.greenrobot.eventbus.EventBus
  * Created by Joe_ZBB on 2019-05-27 18:35
  * ================================================
  */
-abstract class BaseFragment:Fragment(){
+abstract class BaseFragment : Fragment() {
     /**
      * 视图是否加载完毕
      */
@@ -49,11 +48,6 @@ abstract class BaseFragment:Fragment(){
      */
     abstract fun lazyLoad()
 
-    /**
-     * 是否使用 EventBus
-     */
-    open fun useEventBus(): Boolean = false
-
     lateinit var mActivity: Activity
 
 
@@ -70,10 +64,6 @@ abstract class BaseFragment:Fragment(){
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        if (useEventBus()&& !EventBus.getDefault().isRegistered(this)) {
-            EventBus.getDefault().register(this)
-        }
         isViewPrepare = true
         initView(view)
         initData()
@@ -88,12 +78,6 @@ abstract class BaseFragment:Fragment(){
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        if (useEventBus()) {
-            EventBus.getDefault().unregister(this)
-        }
-    }
 
     override fun onAttach(context: Context) {
         super.onAttach(context)

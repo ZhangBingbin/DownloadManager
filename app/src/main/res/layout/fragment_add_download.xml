@@ -31,6 +31,24 @@
             android:layout_height="wrap_content"/>
 
     <android.support.v7.widget.AppCompatButton
+            android:text="下载mp4"
+            android:textColor="@android:color/white"
+            android:layout_marginTop="@dimen/dp_10"
+            android:background="@color/colorPrimary"
+            android:id="@+id/btn_mp4_download"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+    <android.support.v7.widget.AppCompatButton
+            android:text="下载m3u8"
+            android:textColor="@android:color/white"
+            android:layout_marginTop="@dimen/dp_10"
+            android:background="@color/colorPrimary"
+            android:id="@+id/btn_m3u8_download"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+    <android.support.v7.widget.AppCompatButton
             android:text="查看下载"
             android:layout_marginTop="30dp"
             android:background="@color/colorPrimary"

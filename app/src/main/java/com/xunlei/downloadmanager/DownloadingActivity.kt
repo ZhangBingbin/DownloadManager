@@ -1,15 +1,19 @@
 package com.xunlei.downloadmanager
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.LinearLayoutManager
+import com.blankj.utilcode.util.LogUtils
 import com.xunlei.downloadlib.bean.DownloadInfo
 import com.xunlei.downloadlib.database.DownloadDaoManager
+import com.xunlei.downloadlib.status.DownloadStatus
+import com.xunlei.downloadlib.util.DownloadUtil
 import io.reactivex.Flowable
 import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.schedulers.Schedulers
+import io.reactivex.disposables.Disposable
 import kotlinx.android.synthetic.main.fragment_downloading.*
 import java.util.concurrent.TimeUnit
 
@@ -31,7 +35,10 @@ class DownloadingActivity : AppCompatActivity() {
     private lateinit var mDownloadingAdapter: DownloadingAdapter
     private lateinit var mDownloadingList: MutableList<DownloadInfo>
 
+    private var mDisposable: Disposable? = null
 
+
+    @SuppressLint("CheckResult")
     private fun initData() {
         mDownloadingList = DownloadDaoManager.INSTANCE.loadDownloadList()
         mDownloadingAdapter = DownloadingAdapter()
@@ -40,19 +47,32 @@ class DownloadingActivity : AppCompatActivity() {
         mDownloadingAdapter.bindToRecyclerView(downloading_recyclerView)
         downloading_recyclerView.adapter = mDownloadingAdapter
 
-        Flowable.interval(0, 1000, TimeUnit.MILLISECONDS)
-            .subscribeOn(Schedulers.io())
-            .doOnComplete {
-                val list = DownloadDaoManager.INSTANCE.loadAllDownloadingList()
-
-                for (downloadInfo in list) {
-                    mDownloadingAdapter.updateItemData(downloadInfo)
+        mDownloadingAdapter.setOnItemClickListener { adapter, _, position ->
+            val downloadInfo = adapter.data[position] as DownloadInfo
+            when (downloadInfo.status) {
+                DownloadStatus.DOWNLOADING.value -> {
+                    DownloadUtil.INSTANCE.pause(downloadInfo)
+                }
+                else -> {
+                    LogUtils.eTag("ZBB","恢复下载")
+                    DownloadUtil.INSTANCE.startDownload(downloadInfo.downloadUrl,{
+                    },true)
                 }
             }
+        }
+
+        mDisposable = Flowable.interval(0, 1000, TimeUnit.MILLISECONDS)
             .observeOn(AndroidSchedulers.mainThread())
-            .subscribe()
+            .subscribe {
+                val list = DownloadDaoManager.INSTANCE.loadAllDownloadingList()
+                mDownloadingAdapter.replaceData(list)
+            }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        mDisposable?.dispose()
+    }
 
     companion object {
         fun actionDownloading(activity: Activity) {

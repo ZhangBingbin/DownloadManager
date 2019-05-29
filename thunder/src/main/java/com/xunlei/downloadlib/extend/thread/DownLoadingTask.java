@@ -17,10 +17,7 @@ public class DownLoadingTask extends AsyncTask<Void, List<DownloadInfo>, List<Do
     @Override
     protected List<DownloadInfo> doInBackground(Void... objects) {
 
-        LogUtils.eTag("ZBB","doInBackground");
-
         while (DownUtil.getInstance().isIsLoopDown()) {
-            LogUtils.eTag("ZBB","isIsLoopDown");
             TorrentUpdate.Companion.getINSTANCE().updateItem();
             SystemClock.sleep(1000);
         }
